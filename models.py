@@ -42,7 +42,13 @@ class Mensagem(Base):
     __tablename__ = "mensagens"
 
     id = Column(Integer, primary_key=True, index=True)
-    conteudo = Column(Text, nullable=False)
+    
+    conteudo = Column(Text, nullable=True)                    # pode ser None se for só ficheiro
+    file_url = Column(String(500), nullable=True)
+    file_name = Column(String(200), nullable=True)
+    file_type = Column(String(50), nullable=True)             # image, video, audio, document
+    file_size = Column(Integer, nullable=True)                # em bytes
+
     enviada_em = Column(DateTime(timezone=True), server_default=func.now())
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
