@@ -17,12 +17,13 @@ app = FastAPI(
 
 # ─── CORS ────────────────────────────────────────────
 
+origins = [
+    "https://chat.drucciacessorios.pt",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://chat.drucciacessorios.pt"
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
