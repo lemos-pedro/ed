@@ -11,35 +11,45 @@ from uuid import uuid4
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
-
 class ConnectionManager:
     def __init__(self):
-        self.salas: Dict[int, List[tuple]] = {}
+        # Agora guardamos um dicionário simples, não o objeto do SQLAlchemy
+        self.salas: Dict[int, List[dict]] = {}
 
     async def connect(self, sala_id: int, websocket: WebSocket, user: User):
         await websocket.accept()
         if sala_id not in self.salas:
             self.salas[sala_id] = []
-        self.salas[sala_id].append((websocket, user))
+        
+        # Criamos um snapshot dos dados necessários para evitar o DetachedInstanceError
+        user_data = {
+            "id": user.id,
+            "nome": user.nome
+        }
+        
+        self.salas[sala_id].append({"websocket": websocket, "user": user_data})
 
     def disconnect(self, sala_id: int, websocket: WebSocket):
         if sala_id in self.salas:
-            self.salas[sala_id] = [(ws, u) for ws, u in self.salas[sala_id] if ws != websocket]
+            # Filtramos a lista removendo o dicionário que contém este websocket
+            self.salas[sala_id] = [
+                conn for conn in self.salas[sala_id] if conn["websocket"] != websocket
+            ]
 
-    async def broadcast(self, sala_id: int, message: dict, exclude=None):
-        """Broadcast para todos exceto o remetente (para evitar duplicação)"""
+    async def broadcast(self, sala_id: int, message: dict, exclude: int = None):
         if sala_id in self.salas:
-            for websocket, user in self.salas[sala_id]:
-                if exclude and user.id == exclude:
+            for conn in self.salas[sala_id]:
+                ws = conn["websocket"]
+                user_id = conn["user"]["id"]
+                
+                # Agora o ID é um inteiro puro, não dispara refresh no banco
+                if exclude and user_id == exclude:
                     continue
                 try:
-                    await websocket.send_json(message)
+                    await ws.send_json(message)
                 except:
                     pass
-
-
-manager = ConnectionManager()
-
+                    
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
