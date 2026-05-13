@@ -108,31 +108,39 @@ async def chat_websocket(
         await websocket.close(code=1008, reason="Acesso negado")
         return
 
+    # --- NOVO: EXTRAIR DADOS ANTES DE USAR NO LOOP ---
+    # Isso evita que o SQLAlchemy tente ir ao banco de dados no futuro
+    u_id = user.id
+    u_nome = user.nome
+    # ------------------------------------------------
+
     result = await db.execute(select(Sala).where(Sala.id == sala_id))
     if not result.scalar_one_or_none():
         await websocket.close(code=1008, reason="Sala não existe")
         return
 
+    # Aqui passamos o objeto 'user' para o connect (que já trata o Snapshot)
     await manager.connect(sala_id, websocket, user)
-    print(f"✅ {user.nome} conectado à sala {sala_id}")
+    print(f"✅ {u_nome} conectado à sala {sala_id}")
 
     # Histórico
     historico = await get_historico(sala_id, db)
     await websocket.send_json({"tipo": "historico", "mensagens": historico})
 
-    # Entrada
+    # Entrada (Usando u_nome e u_id)
     await manager.broadcast(sala_id, {
         "tipo": "sistema",
-        "mensagem": f"{user.nome} entrou na sala.",
+        "mensagem": f"{u_nome} entrou na sala.",
         "hora": datetime.utcnow().isoformat()
-    }, exclude=user.id)
+    }, exclude=u_id)
 
     try:
         while True:
             data = await websocket.receive_json()
 
             if data.get("tipo") == "typing":
-                await manager.broadcast(sala_id, {"tipo": "typing", "autor": user.nome}, exclude=user.id)
+                # Usando u_nome e u_id aqui
+                await manager.broadcast(sala_id, {"tipo": "typing", "autor": u_nome}, exclude=u_id)
                 continue
 
             nova_mensagem = Mensagem(
@@ -141,7 +149,7 @@ async def chat_websocket(
                 file_name=data.get("file_name"),
                 file_type=data.get("file_type"),
                 file_size=data.get("file_size"),
-                user_id=user.id,
+                user_id=u_id, # Usando variável fixa
                 sala_id=sala_id
             )
 
@@ -152,8 +160,8 @@ async def chat_websocket(
             broadcast_msg = {
                 "tipo": "mensagem",
                 "id": nova_mensagem.id,
-                "user_id": user.id,
-                "autor": user.nome,
+                "user_id": u_id,
+                "autor": u_nome,
                 "conteudo": nova_mensagem.conteudo,
                 "file_url": nova_mensagem.file_url,
                 "file_name": nova_mensagem.file_name,
@@ -161,19 +169,18 @@ async def chat_websocket(
                 "hora": nova_mensagem.enviada_em.isoformat()
             }
 
-            # Broadcast para TODOS EXCETO o remetente
-            await manager.broadcast(sala_id, broadcast_msg, exclude=user.id)
+            # Broadcast usando variável fixa no exclude
+            await manager.broadcast(sala_id, broadcast_msg, exclude=u_id)
 
     except WebSocketDisconnect:
         manager.disconnect(sala_id, websocket)
         await manager.broadcast(sala_id, {
             "tipo": "sistema",
-            "mensagem": f"{user.nome} saiu da sala.",
+            "mensagem": f"{u_nome} saiu da sala.",
             "hora": datetime.utcnow().isoformat()
         })
     except Exception as e:
         print(f"❌ Erro no WebSocket: {e}")
-
 
 async def get_historico(sala_id: int, db: AsyncSession) -> List[dict]:
     result = await db.execute(
