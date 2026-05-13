@@ -19,12 +19,17 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "https://chat.drucciacessorios.pt",
+        "http://127.0.0.1:5500",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "*"
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
-# ─── Criar tabelas na BD ─────────────────────────────
+)─ Criar tabelas na BD ─────────────────────────────
 
 @app.on_event("startup")
 async def startup():
